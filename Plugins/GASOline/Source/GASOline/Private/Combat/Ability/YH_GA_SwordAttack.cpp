@@ -52,7 +52,7 @@ void UYH_GA_SwordAttack::ActivateAbility(
 	
 
 	// Wait for AnimNotify HitCheck event from Blueprint
-	// Blueprint sends: Send Gamplay Event → YH.Combat.Event.HitCheck
+	// Blueprint sends: Send Gameplay Event → YH.Combat.Notify.HitCheck (must match the tag below exactly)
 
 	WaitHitCheckTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
 		this, 
