@@ -46,7 +46,13 @@ void UYH_ComboManager::BeginPlay()
 			.FindOrAdd(HitConfirmedTag)
 			.AddUObject(this, &UYH_ComboManager::HandleHitConfirmed);
 	}
-	
+
+	if (HitMissedtag.IsValid())
+	{
+		HitMissedHandle = OwnerASC->GenericGameplayEventCallbacks
+			.FindOrAdd(HitMissedtag)
+			.AddUObject(this, &UYH_ComboManager::HandleHitMissed);
+	}
 }
 
 void UYH_ComboManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -95,25 +101,39 @@ void UYH_ComboManager::OnAttackInput()
 
 void UYH_ComboManager::HandleHitConfirmed(const FGameplayEventData* Payload)
 {
-
 	//Ignore stray events with no attack happening.
 	if (!bAttackActive)
 	{
 		return;
 	}
 
-	bAttackActive = false;
-	// Which Weapon landed each hit this chain - this is what the finisher recipe reads.
-	struct FComboHistoryEntry ComboEntry;
-
-	//Add this hit to the combo history, which the finisher recipe will read. The recipe focuses on weapon+element conversion.
+	// Which weapon landed this hit - this is what the finisher recipe reads.
+	// Only a landed hit counts toward the recipe; a whiff carries no weapon/element into it.
+	FComboHistoryEntry ComboEntry;
 	ComboEntry.Weapon = PendingAttackWeapon;
 	ComboEntry.Element = PendingElement;
 	ComboHistory.Add(ComboEntry);
-	
 
+	AdvanceCombo();
+}
+
+void UYH_ComboManager::HandleHitMissed(const FGameplayEventData* Payload)
+{
+	if (!bAttackActive)
+	{
+		return;
+	}
+
+	// A whiff still advances the string - hack-n-slash combos keep going when you swing at
+	// air, they just don't feed the finisher recipe. Positioning is rewarded via damage/finisher
+	// quality elsewhere, not by punting the player back to combo index 0.
+	AdvanceCombo();
+}
+
+void UYH_ComboManager::AdvanceCombo()
+{
+	bAttackActive = false;
 	++ComboIndex;
-	// Clear the entry struct for the next hit - avoids stale data if the next attack doesn't set both fields.
 	OnComboCountChanged.Broadcast(ComboIndex);
 
 	if (UWorld* World = GetWorld())
@@ -124,7 +144,6 @@ void UYH_ComboManager::HandleHitConfirmed(const FGameplayEventData* Payload)
 	// Reached the finsher: fire it, then zero out. Finisher.Active blocks input meanwhile.
 	if (ComboIndex >= MaxComboHits)
 	{
-		
 		// Evaluate the recipe based on the combo history, and fire the finisher event with the result.
 		FComboResult Result = UYH_CombatStatics::EvaluateCombo(ComboHistory);
 		OnRequestFinisher.Broadcast(Result);
@@ -132,10 +151,23 @@ void UYH_ComboManager::HandleHitConfirmed(const FGameplayEventData* Payload)
 		return;
 	}
 
-	// Chain continues ONLY because we made contact. Buffered press -> attack immediately.
+	// Buffered press (pressed mid-swing) -> next attack fires on the next tick.
+	// AdvanceCombo() is reached from inside the CURRENT attack's HitCheck AnimNotify
+	// callback (still mid-montage), so calling StartAttack() here synchronously would ask
+	// the AnimInstance to start a new montage while it's still inside a notify callback of
+	// the one being replaced. That reentrancy into the anim system is what was making
+	// combo hits intermittently get dropped when the player spammed the attack button.
+	// Deferring by a single tick (imperceptible) gets us out of that callback first.
 	if (bInputBuffered)
 	{
-		StartAttack();
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick(this, &UYH_ComboManager::StartAttack);
+		}
+		else
+		{
+			StartAttack();
+		}
 		return;
 	}
 
@@ -144,16 +176,6 @@ void UYH_ComboManager::HandleHitConfirmed(const FGameplayEventData* Payload)
 	{
 		World->GetTimerManager().SetTimer(ComboWindowTimer, this, &UYH_ComboManager::OnComboWindowExpired, ComboWindow, false);
 	}
-}
-
-void UYH_ComboManager::HandleHitMissed(const FGameplayEventData* Payload)
-{
-	if (!bAttackActive)
-	{
-		return;
-	}
-	// Whiff breaks the chain - positioning matters.
-	ResetCombo();
 }
 
 void UYH_ComboManager::StartAttack()

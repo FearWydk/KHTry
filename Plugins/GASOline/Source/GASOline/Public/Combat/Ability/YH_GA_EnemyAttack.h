@@ -7,6 +7,7 @@
 #include "YH_GA_EnemyAttack.generated.h"
 
 class UAbilityTask_PlayMontageAndWait;
+class UAbilityTask_WaitGameplayEvent;
 
 USTRUCT(BlueprintType)
 struct FEnemyAttackData
@@ -58,12 +59,28 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UAbilityTask_PlayMontageAndWait> PlayMontageTask;
 
+	// Waits for the AnimNotify HitCheck event from the attack montage (mirrors YH_GA_SwordAttack).
+	UPROPERTY()
+	TObjectPtr<UAbilityTask_WaitGameplayEvent> WaitHitCheckTask;
+
+	UFUNCTION()
+	void OnMontageEnd();
+
+	// Listens for AnimNotify HitCheck event from Blueprint
+	UFUNCTION()
+	void OnHitCheckReceived(FGameplayEventData Payload);
+
+	// Performs the hit trace and applies damage using CurrentAttackData
+	void PerformHitTrace(const FGameplayAbilityActorInfo* ActorInfo);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	TMap<FGameplayTag, FEnemyAttackData> EnemyAttackDataMap;
 
+	// Gameplay Effect class to apply on a landed hit. Magnitude comes from CurrentAttackData.Damage via SetByCaller "Data.Damage".
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
-	FEnemyAttackData CurrentAttackData;
+	TSubclassOf<UGameplayEffect> DamageEffectClass;
 
-	
-	
+	// Cached on the ability instance (InstancedPerExecution) from EnemyAttackDataMap in ActivateAbility;
+	// read by PerformHitTrace on the HitCheck notify.
+	FEnemyAttackData CurrentAttackData;
 };

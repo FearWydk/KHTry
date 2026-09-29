@@ -40,25 +40,129 @@ void UYH_GA_EnemyAttack::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	const FEnemyAttackData* AttackData = 
+	const FEnemyAttackData* AttackData =
 		TriggerEventData ? EnemyAttackDataMap.Find(TriggerEventData->EventTag) : nullptr;
 
 	if (!AttackData|| !AttackData->AttackMontage)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No attack data found for tag: %s"), *TriggerEventData->EventTag.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("No attack data found for tag: %s"),
+			TriggerEventData ? *TriggerEventData->EventTag.ToString() : TEXT("NONE"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, false, true);
 		return;
 	}
-	FEnemyAttackData CurrentAttack = *AttackData;
+	// Cache on the ability instance (InstancedPerExecution) so PerformHitTrace can read it later off the HitCheck notify.
+	CurrentAttackData = *AttackData;
+
+	// Wait for AnimNotify HitCheck event from Blueprint, same as the player's sword attack.
+	WaitHitCheckTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
+		this,
+		FGameplayTag::RequestGameplayTag(FName("YH.Combat.Notify.HitCheck")),
+		nullptr,
+		true);
+
+	WaitHitCheckTask->EventReceived.AddDynamic(this, &UYH_GA_EnemyAttack::OnHitCheckReceived);
+	WaitHitCheckTask->ReadyForActivation();
 
 	PlayMontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
 		this,
 		NAME_None,
-		CurrentAttack.AttackMontage);
+		CurrentAttackData.AttackMontage);
+	if (!PlayMontageTask)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to create PlayMontageTask"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, false, true);
+		return;
+	}
+
+	PlayMontageTask->OnCompleted.AddDynamic(this, &UYH_GA_EnemyAttack::OnMontageEnd);
+	PlayMontageTask->OnInterrupted.AddDynamic(this, &UYH_GA_EnemyAttack::OnMontageEnd);
+	PlayMontageTask->OnCancelled.AddDynamic(this, &UYH_GA_EnemyAttack::OnMontageEnd);
+	PlayMontageTask->ReadyForActivation();
+}
+
+void UYH_GA_EnemyAttack::OnHitCheckReceived(FGameplayEventData Payload)
+{
+	const FGameplayAbilityActorInfo* ActorInfo = GetCurrentActorInfo();
+	if (!ActorInfo)
+	{
+		EndAbility(GetCurrentAbilitySpecHandle(), ActorInfo, GetCurrentActivationInfo(), true, true);
+		return;
+	}
+
+	PerformHitTrace(ActorInfo);
+}
+
+void UYH_GA_EnemyAttack::PerformHitTrace(const FGameplayAbilityActorInfo* ActorInfo)
+{
+	AActor* AvatarActor = ActorInfo->AvatarActor.Get();
+	if (!AvatarActor) return;
+
+	UWorld* World = AvatarActor->GetWorld();
+	if (!World) return;
+
+	FVector TraceStart = AvatarActor->GetActorLocation();
+	FVector TraceEnd = TraceStart + (AvatarActor->GetActorForwardVector() * CurrentAttackData.TraceRange);
+
+	TArray<FHitResult> HitResults;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(AvatarActor);
+
+	World->SweepMultiByChannel(
+		HitResults,
+		TraceStart,
+		TraceEnd,
+		FQuat::Identity,
+		ECollisionChannel::ECC_Pawn,
+		FCollisionShape::MakeSphere(CurrentAttackData.TraceRadius),
+		QueryParams
+	);
+
+	UAbilitySystemComponent* SourceASC = ActorInfo->AbilitySystemComponent.Get();
+	if (!SourceASC) return;
+
+	for (const FHitResult& Hit : HitResults)
+	{
+		AActor* HitActor = Hit.GetActor();
+		if (!HitActor) continue;
+
+		UAbilitySystemComponent* TargetASC =
+			UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitActor);
+		if (!TargetASC) continue;
+
+		if (DamageEffectClass)
+		{
+			FGameplayEffectContextHandle EffectContext = SourceASC->MakeEffectContext();
+			EffectContext.AddSourceObject(AvatarActor);
+
+			FGameplayEffectSpecHandle SpecHandle =
+				SourceASC->MakeOutgoingSpec(DamageEffectClass, 1.0f, EffectContext);
+
+			if (SpecHandle.IsValid())
+			{
+				SpecHandle.Data->SetSetByCallerMagnitude(
+					FGameplayTag::RequestGameplayTag(FName("Data.Damage")),
+					-CurrentAttackData.Damage);
+
+				SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+			}
+		}
+
+		// Only damage the first valid target hit per swing.
+		break;
+	}
 }
 
 void UYH_GA_EnemyAttack::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+	if (WaitHitCheckTask)
+	{
+		WaitHitCheckTask->EndTask();
+	}
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+void UYH_GA_EnemyAttack::OnMontageEnd()
+{
+	EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), false, false);
 }

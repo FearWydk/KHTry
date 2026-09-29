@@ -31,15 +31,17 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnComboCountChanged, int32, NewCoun
 
 
 /**
- * Contact-gated, buffered combo controller.
+ * Buffered combo controller (hack-n-slash feel, not contact-gated).
  *
  * Owns the combo STATE and the GATE LOGIC only — it never plays montages.
  * Animation and ability activation stay in Blueprint via the OnRequest* delegates,
  * matching the project's "animation lives in BP" split. The attack ability reports
  * back through the ASC with YH.Combat.Hit.Confirmed (landed) or YH.Combat.Hit.Missed
- * (whiffed); this controller advances the chain on a confirm and resets it on a miss
- * or a window timeout. That is the KH2 gate: input is always buffered, but it only
- * ADVANCES on contact.
+ * (whiffed); this controller advances the chain on EITHER — a whiff keeps the string
+ * going the same as a landed hit, it just doesn't feed the finisher recipe (only
+ * confirmed hits are recorded into ComboHistory). The chain only resets on the combo
+ * window timing out with no follow-up input, or the safety timeout firing because the
+ * ability never reported a result at all.
  *
  * Wiring:
  *   - Character attack input  -> OnAttackInput()
@@ -114,6 +116,7 @@ private:
 	void HandleHitMissed(const FGameplayEventData* Payload);
 
 	void StartAttack();
+	void AdvanceCombo();
 	void ResetCombo();
 	void OnComboWindowExpired();
 	void OnAttackTimedOut();

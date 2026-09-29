@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "GASO_AttributeSet.h"
+#include "GameplayEffectExtension.h"
 #include "YH_PlayerAttributeSet.generated.h"
 
 /**
@@ -23,6 +24,12 @@ public:
 	UYH_PlayerAttributeSet();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	//Called automatically by GAS after any GameplayEffect modifies an attribute. Mirrors UYH_EnemyAttributeSet.
+	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes|Combat")
+	bool bDeathStarted = false;
 
 	// Focus — elemental magic resource consumed by element injection into combos
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes|Combat")

@@ -10,6 +10,8 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/World.h"
+#include "AIController.h"
+#include "BrainComponent.h"
 
 UYH_GA_Death::UYH_GA_Death()
 {
@@ -52,11 +54,26 @@ void UYH_GA_Death::ActivateAbility(
 		
 		
 			ACharacter* Char = Cast<ACharacter>(AvatarActor);
-			if(Char&&Char->GetCharacterMovement())
+			if(Char)
 			{
-				Char->GetCharacterMovement()->DisableMovement();
+				if (Char->GetCharacterMovement())
+				{
+					Char->GetCharacterMovement()->DisableMovement();
+				}
+
+				// AI-controlled (enemy): stop the Behavior Tree and let go of the pawn so it stays
+				// dead on the floor instead of continuing to sense/attack from the corpse. No-op for
+				// the player, whose Controller is a PlayerController, not an AIController.
+				if (AAIController* AICon = Cast<AAIController>(Char->GetController()))
+				{
+					if (UBrainComponent* Brain = AICon->GetBrainComponent())
+					{
+						Brain->StopLogic(TEXT("Dead"));
+					}
+					AICon->UnPossess();
+				}
 			}
-		
+
 	}
 
 	PlayMontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(

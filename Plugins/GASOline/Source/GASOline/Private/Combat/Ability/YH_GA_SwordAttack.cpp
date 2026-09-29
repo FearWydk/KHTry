@@ -131,6 +131,8 @@ void UYH_GA_SwordAttack::PerformHitTrace(const FGameplayAbilityActorInfo* ActorI
 		ActorInfo->AbilitySystemComponent.Get();
 	if (!SourceASC) return;
 
+	bool bHitLanded = false;
+
 	for (const FHitResult& Hit : HitResults)
 	{
 		AActor* HitActor = Hit.GetActor();
@@ -183,8 +185,21 @@ void UYH_GA_SwordAttack::PerformHitTrace(const FGameplayAbilityActorInfo* ActorI
 			HitConfirmedPayload
 		);
 
+		bHitLanded = true;
+
 		// Only damage the first valid enemy hit per swing
 		break;
+	}
+
+	// Nothing landed - tell the combo manager it whiffed so the chain doesn't just hang
+	// until the safety timeout resets it. A hack-n-slash combo should keep going on a miss.
+	if (!bHitLanded)
+	{
+		UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+			AvatarActor,
+			FGameplayTag::RequestGameplayTag(FName("YH.Combat.Hit.Missed")),
+			FGameplayEventData()
+		);
 	}
 }
 
