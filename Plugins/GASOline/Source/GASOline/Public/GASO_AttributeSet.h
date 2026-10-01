@@ -51,19 +51,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxStamina, Category = "Attributes")
 	FGameplayAttributeData MaxStamina;
 	ATTRIBUTE_ACCESSORS_BASIC(UGASO_AttributeSet, MaxStamina);
-	
-	UPROPERTY(BlueprintReadOnly,Category = "Attributes")
-	FGameplayAttributeData Defense;
-	ATTRIBUTE_ACCESSORS_BASIC(UGASO_AttributeSet, Defense);
-	
-	
-	UPROPERTY(BlueprintReadOnly,Category = "Attributes")
-	FGameplayAttributeData MovementSpeedMultiplier;
-	ATTRIBUTE_ACCESSORS_BASIC(UGASO_AttributeSet, MovementSpeedMultiplier);
-	
-	
-	
-	
 
 public:
 
