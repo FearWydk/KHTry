@@ -61,16 +61,21 @@ void UYH_GA_Death::ActivateAbility(
 					Char->GetCharacterMovement()->DisableMovement();
 				}
 
-				// AI-controlled (enemy): stop the Behavior Tree and let go of the pawn so it stays
-				// dead on the floor instead of continuing to sense/attack from the corpse. No-op for
-				// the player, whose Controller is a PlayerController, not an AIController.
+				// AI-controlled (enemy): stop the Behavior Tree so it stays dead on the floor
+				// instead of continuing to sense/attack from the corpse. No-op for the player,
+				// whose Controller is a PlayerController, not an AIController.
+				//
+				// Deliberately NOT calling AICon->UnPossess() here: detaching the controller from
+				// a pawn that's about to be destroyed (via EndAbility/SetLifeSpan) caused an
+				// "Assertion failed: bRegistered" crash on PIE stop - StopLogic() alone already
+				// stops all further BT activity, which is all this actually needed to fix. The
+				// engine's own pawn-destruction teardown handles releasing the controller safely.
 				if (AAIController* AICon = Cast<AAIController>(Char->GetController()))
 				{
 					if (UBrainComponent* Brain = AICon->GetBrainComponent())
 					{
 						Brain->StopLogic(TEXT("Dead"));
 					}
-					AICon->UnPossess();
 				}
 			}
 
