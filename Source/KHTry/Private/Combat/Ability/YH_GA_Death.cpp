@@ -103,9 +103,18 @@ void UYH_GA_Death::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGa
 
 	if (AActor* A = GetAvatarActorFromActorInfo())
 	{
-		A->Destroy();
+		// This ability gets force-cancelled (EndAbility with bWasCancelled=true) if PIE is
+		// stopped while the death montage is still playing. At that point the world is already
+		// mid-teardown and has started unregistering every actor's components; calling Destroy()
+		// here as well double-unregisters them and trips "Assertion failed: bRegistered" in
+		// ActorComponent.cpp. The world's own teardown already handles cleaning up the actor.
+		const UWorld* World = A->GetWorld();
+		if (!World || !World->bIsTearingDown)
+		{
+			A->Destroy();
+		}
 	}
-	
+
 }
 
 void UYH_GA_Death::OnMontageEnd()
