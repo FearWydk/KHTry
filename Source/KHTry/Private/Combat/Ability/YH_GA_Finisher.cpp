@@ -55,13 +55,21 @@ void UYH_GA_Finisher::ActivateAbility(
 	WaitHitCheckTask->EventReceived.AddDynamic(this, &UYH_GA_Finisher::OnFinisherHitCheckReceived);
 	WaitHitCheckTask->ReadyForActivation();
 
-	UAnimMontage* AbilityMontage = Cast<UAnimMontage>(const_cast<UObject*>(TriggerEventData->OptionalObject.Get()));
+	// TriggerEventData is null when the ability is activated by input/tag instead of a gameplay event.
+	UAnimMontage* AbilityMontage = TriggerEventData
+		? Cast<UAnimMontage>(const_cast<UObject*>(TriggerEventData->OptionalObject.Get()))
+		: nullptr;
 	if (!AbilityMontage)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[Finisher] Ending immediately: no montage in the event payload (TriggerEventData=%s, OptionalObject=%s). The event's Optional Object must be the finisher montage."),
+			TriggerEventData ? TEXT("valid") : TEXT("null"),
+			(TriggerEventData && TriggerEventData->OptionalObject) ? *TriggerEventData->OptionalObject->GetName() : TEXT("null"));
 		EndAbility(GetCurrentAbilitySpecHandle(), ActorInfo, GetCurrentActivationInfo(), true, true);
 		return;
 	}
-	
+
+	UE_LOG(LogTemp, Log, TEXT("[Finisher] Playing montage %s"), *AbilityMontage->GetName());
+
 		//Ability plays the montage.
 	PlayMontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
 		this,
@@ -98,6 +106,7 @@ void UYH_GA_Finisher::OnFinisherHitCheckReceived(FGameplayEventData Payload)
 
 void UYH_GA_Finisher::OnMontageEnd()
 {
+	UE_LOG(LogTemp, Log, TEXT("[Finisher] Montage ended (completed, interrupted or cancelled) - ending ability."));
 	EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), false, true);
 }
 

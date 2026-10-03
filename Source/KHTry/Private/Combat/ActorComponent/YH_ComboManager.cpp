@@ -146,6 +146,15 @@ void UYH_ComboManager::AdvanceCombo()
 	{
 		// Evaluate the recipe based on the combo history, and fire the finisher event with the result.
 		FComboResult Result = UYH_CombatStatics::EvaluateCombo(ComboHistory);
+
+		// A None in any field below means the Blueprint's Find Finisher Montage lookup has nothing
+		// to match, so no montage gets sent to the Finisher ability.
+		UE_LOG(LogTemp, Log, TEXT("[ComboManager] Requesting finisher: history=%d FinisherType=%s Element=%s Subcategory=%s"),
+			ComboHistory.Num(),
+			*StaticEnum<EYH_FinisherType>()->GetNameStringByValue(static_cast<int64>(Result.FinisherType)),
+			*StaticEnum<EYH_ElementType>()->GetNameStringByValue(static_cast<int64>(Result.DominantElement)),
+			*StaticEnum<EYH_WeaponSubcategory>()->GetNameStringByValue(static_cast<int64>(Result.Subcategory)));
+
 		OnRequestFinisher.Broadcast(Result);
 		ResetCombo();
 		return;
