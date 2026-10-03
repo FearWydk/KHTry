@@ -11,6 +11,7 @@ class AActor;
 class ACharacter;
 class UItemInstance;
 class UEquipmentDef;
+class GameplayEffect;
 /**
  * 
  */
@@ -30,10 +31,10 @@ public:
 	TObjectPtr<AActor> SpawnedEquipmentActor;
 	
 	UFUNCTION(BlueprintCallable)
-	void Initialize(UItemInstance* ItemInst, ACharacter* Character);
+	void Initialize(UItemInstance* ItemInst, ACharacter* Character, TSubclassOf<UGameplayEffect> EquipmentStats);
 	
 	UFUNCTION(BlueprintCallable)
-	void HandleEquipItem(ACharacter* Character);
+	void HandleEquipItem(ACharacter* Character, TSubclassOf<UGameplayEffect> EquipmentStats);
 	
 	UFUNCTION(BlueprintCallable)
 	void HandleUnequipItem(ACharacter* Character);
